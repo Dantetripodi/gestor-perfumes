@@ -1,0 +1,5 @@
+{
+  "name": "Parfumier Pro",
+  "description": "A robust, scalable perfume resale management system featuring multi-currency support (USD/ARS), real-time exchange rate integration, inventory tracking, and AI-powered business insights.",
+  "requestFramePermissions": []
+}
