@@ -25,6 +25,8 @@ export interface Product {
   sku: string;
   currentStock: number;
   avgCostUSD: number;
+  costCurrency: Currency;
+  costValue: number;
   targetMargin: number;
   imageUrl?: string;
 }
@@ -35,6 +37,8 @@ export interface PurchaseEntry {
   date: string;
   quantity: number;
   costPerUnitUSD: number;
+  costCurrency: Currency;
+  costValue: number;
   exchangeRateUsed: number;
 }
 

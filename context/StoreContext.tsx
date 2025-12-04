@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { Product, Sale, PurchaseEntry, ExchangeRate, SaleItem, SaleChannel } from '../types';
+import { Product, Sale, PurchaseEntry, ExchangeRate, SaleItem, SaleChannel, Currency } from '../types';
 import { fetchExchangeRate } from '../services/currencyService';
 
 interface StoreContextType {
@@ -8,7 +8,9 @@ interface StoreContextType {
   purchases: PurchaseEntry[];
   exchangeRate: ExchangeRate;
   addProduct: (product: Product) => void;
-  addStock: (productId: string, quantity: number, costUSD: number) => void;
+  updateProduct: (productId: string, updates: Partial<Product>) => void;
+  deleteProduct: (productId: string) => void;
+  addStock: (productId: string, quantity: number, costValue: number, costCurrency: Currency) => void;
   recordSale: (items: {productId: string, quantity: number, priceARS: number}[], channel: SaleChannel, customer?: string) => void;
   refreshExchangeRate: () => Promise<void>;
   setManualExchangeRate: (rate: number) => void;
@@ -17,17 +19,32 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
+const convertToUSD = (value: number, currency: Currency, exchangeRate: number): number => {
+  if (currency === Currency.USD) return value;
+  return value / exchangeRate;
+};
+
+const convertFromUSD = (valueUSD: number, currency: Currency, exchangeRate: number): number => {
+  if (currency === Currency.USD) return valueUSD;
+  return valueUSD * exchangeRate;
+};
+
 const INITIAL_PRODUCTS: Product[] = [
-  { id: '1', name: 'Sauvage', brand: 'Dior', description: 'Eau de Toilette 100ml', sku: 'DIO-SAU-100', currentStock: 10, avgCostUSD: 85, targetMargin: 40 },
-  { id: '2', name: 'Bleu de Chanel', brand: 'Chanel', description: 'Parfum 100ml', sku: 'CHA-BLE-100', currentStock: 5, avgCostUSD: 110, targetMargin: 35 },
-  { id: '3', name: 'Acqua Di Gio', brand: 'Giorgio Armani', description: 'Profondo 75ml', sku: 'ARM-ADG-75', currentStock: 12, avgCostUSD: 70, targetMargin: 50 },
+  { id: '1', name: 'Sauvage', brand: 'Dior', description: 'Eau de Toilette 100ml', sku: 'DIO-SAU-100', currentStock: 10, avgCostUSD: 85, costCurrency: Currency.USD, costValue: 85, targetMargin: 40 },
+  { id: '2', name: 'Bleu de Chanel', brand: 'Chanel', description: 'Parfum 100ml', sku: 'CHA-BLE-100', currentStock: 5, avgCostUSD: 110, costCurrency: Currency.USD, costValue: 110, targetMargin: 35 },
+  { id: '3', name: 'Acqua Di Gio', brand: 'Giorgio Armani', description: 'Profondo 75ml', sku: 'ARM-ADG-75', currentStock: 12, avgCostUSD: 70, costCurrency: Currency.USD, costValue: 70, targetMargin: 50 },
 ];
 
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       const saved = localStorage.getItem('products');
-      return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+      const parsed = saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+      return parsed.map((p: Product) => ({
+        ...p,
+        costCurrency: p.costCurrency || Currency.USD,
+        costValue: p.costValue ?? p.avgCostUSD ?? 0,
+      }));
     } catch (error) {
       console.error('Error loading products from localStorage:', error);
       return INITIAL_PRODUCTS;
@@ -85,6 +102,18 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, [purchases]);
 
+  useEffect(() => {
+    if (exchangeRate.sell > 0) {
+      setProducts(prev => prev.map(p => {
+        const costInUSD = convertToUSD(p.costValue, p.costCurrency, exchangeRate.sell);
+        return {
+          ...p,
+          avgCostUSD: costInUSD,
+        };
+      }));
+    }
+  }, [exchangeRate.sell]);
+
   const refreshExchangeRate = useCallback(async () => {
     try {
       const rate = await fetchExchangeRate();
@@ -123,16 +152,49 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const addProduct = (product: Product) => {
-    setProducts(prev => [...prev, product]);
+    const costInUSD = convertToUSD(product.costValue, product.costCurrency, exchangeRate.sell || 1200);
+    const productWithUSD: Product = {
+      ...product,
+      avgCostUSD: costInUSD,
+    };
+    setProducts(prev => [...prev, productWithUSD]);
   };
 
-  const addStock = (productId: string, quantity: number, costUSD: number) => {
+  const updateProduct = (productId: string, updates: Partial<Product>) => {
+    setProducts(prev => prev.map(p => {
+      if (p.id !== productId) return p;
+      
+      const updatedProduct = { ...p, ...updates };
+      
+      if (updates.costValue !== undefined || updates.costCurrency !== undefined) {
+        const newCostValue = updates.costValue ?? p.costValue;
+        const newCostCurrency = updates.costCurrency ?? p.costCurrency;
+        const costInUSD = convertToUSD(newCostValue, newCostCurrency, exchangeRate.sell || 1200);
+        updatedProduct.avgCostUSD = costInUSD;
+        updatedProduct.costValue = newCostValue;
+        updatedProduct.costCurrency = newCostCurrency;
+      }
+      
+      return updatedProduct;
+    }));
+  };
+
+  const deleteProduct = (productId: string) => {
+    setProducts(prev => prev.filter(p => p.id !== productId));
+    setPurchases(prev => prev.filter(p => p.productId !== productId));
+  };
+
+  const addStock = (productId: string, quantity: number, costValue: number, costCurrency: Currency) => {
+    const costInUSD = convertToUSD(costValue, costCurrency, exchangeRate.sell || 1200);
+    
     const newPurchase: PurchaseEntry = {
       id: crypto.randomUUID(),
       productId,
       date: new Date().toISOString(),
       quantity,
-      costPerUnitUSD: costUSD,
+      costPerUnitUSD: costInUSD,
+      costCurrency,
+      costValue,
       exchangeRateUsed: exchangeRate.sell || 1200
     };
 
@@ -142,14 +204,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (p.id !== productId) return p;
       
       const totalOldValue = p.currentStock * p.avgCostUSD;
-      const newStockValue = quantity * costUSD;
+      const newStockValue = quantity * costInUSD;
       const newTotalStock = p.currentStock + quantity;
-      const newAvgCost = newTotalStock > 0 ? (totalOldValue + newStockValue) / newTotalStock : costUSD;
+      const newAvgCostUSD = newTotalStock > 0 ? (totalOldValue + newStockValue) / newTotalStock : costInUSD;
+
+      const newCostValue = p.costCurrency === costCurrency
+        ? ((p.costValue * p.currentStock) + (costValue * quantity)) / newTotalStock
+        : convertFromUSD(newAvgCostUSD, p.costCurrency, exchangeRate.sell || 1200);
 
       return {
         ...p,
         currentStock: newTotalStock,
-        avgCostUSD: newAvgCost
+        avgCostUSD: newAvgCostUSD,
+        costValue: newCostValue,
       };
     }));
   };
@@ -205,6 +272,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       purchases,
       exchangeRate,
       addProduct,
+      updateProduct,
+      deleteProduct,
       addStock,
       recordSale,
       refreshExchangeRate,
