@@ -8,10 +8,12 @@ interface LayoutProps {
   onNavigate: (page: string) => void;
 }
 
-/** Layout principal de la aplicación. */
 export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => {
   const { exchangeRate } = useStore();
-
+  
+  const displayRate = exchangeRate.sell || 0;
+  const displayBuy = exchangeRate.buy || 0;
+  
   const navItems = [
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
     { id: 'inventory', label: 'Inventario', icon: Package },
@@ -22,14 +24,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
 
   return (
     <div className="min-h-screen bg-zinc-50 text-slate-900 font-sans selection:bg-amber-100 selection:text-amber-900 pb-20 md:pb-0 flex md:flex-row flex-col">
-      {/* Sidebar Desktop */}
       <aside className="hidden md:flex flex-col w-72 bg-slate-950 text-white h-screen sticky top-0 shadow-2xl z-50">
         <div className="p-8 pb-4">
           <h1 className="text-3xl font-bold tracking-tight text-white">
-            PARFUMIER<span className="text-amber-500">.</span>
+            DT_FRAGANCIAS<span className="text-amber-500"></span>
           </h1>
           <p className="text-xs text-slate-400 mt-2 tracking-[0.2em] uppercase">
-            Sistema de reventa de perfumes de lujo
+            Sistema de reventa de perfumes
           </p>
         </div>
 
@@ -39,11 +40,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
               Cotización dólar blue
             </p>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-mono font-bold text-emerald-400">${exchangeRate.sell}</span>
+              <span className="text-2xl font-mono font-bold text-emerald-400">${displayRate}</span>
               <span className="text-xs text-slate-500">ARS</span>
             </div>
             <div className="text-[10px] text-slate-600 mt-1 flex justify-between">
-              <span>Compra: ${exchangeRate.buy}</span>
+              <span>Compra: ${displayBuy}</span>
               <span
                 className={
                   exchangeRate.source === 'API'
@@ -86,14 +87,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
         </div>
       </aside>
 
-      {/* Topbar Mobile */}
       <div className="md:hidden bg-slate-950 text-white p-4 sticky top-0 z-40 shadow-lg flex justify-between items-center">
         <div>
           <h1 className="text-lg font-bold tracking-wider">
             PARFUMIER<span className="text-amber-500">.</span>
           </h1>
           <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span className="font-mono text-emerald-400 font-bold">$ {exchangeRate.sell}</span>
+            <span className="font-mono text-emerald-400 font-bold">$ {displayRate}</span>
             <span className="opacity-50">|</span>
             <span
               className={
@@ -111,14 +111,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
         </div>
       </div>
 
-      {/* Contenido principal */}
       <main className="flex-1 overflow-x-hidden">
         <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-[calc(100vh-80px)] md:min-h-screen animate-fade-in">
           {children}
         </div>
       </main>
 
-      {/* Bottom Nav Mobile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 flex justify-between items-center z-50 pb-safe">
         {navItems.map((item) => (
           <button

@@ -253,8 +253,8 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Gráficos */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
             Tendencia de ingresos{' '}
@@ -262,8 +262,8 @@ export const Dashboard: React.FC = () => {
               Últimos 7 días
             </span>
           </h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-72 w-full min-h-[288px]">
+            <ResponsiveContainer width="100%" height="100%" minHeight={288}>
               <AreaChart
                 data={last7DaysSales}
                 margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
@@ -346,8 +346,8 @@ export const Dashboard: React.FC = () => {
           <h3 className="text-lg font-bold text-slate-800 mb-6">
             Más vendidos
           </h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-72 w-full min-h-[288px]">
+            <ResponsiveContainer width="100%" height="100%" minHeight={288}>
               <BarChart
                 data={bestSellers}
                 layout="vertical"

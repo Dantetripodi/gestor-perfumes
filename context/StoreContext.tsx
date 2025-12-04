@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Product, Sale, PurchaseEntry, ExchangeRate, SaleItem, SaleChannel } from '../types';
 import { fetchExchangeRate } from '../services/currencyService';
 
@@ -17,7 +17,6 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
-// Mock Data for Initial Load
 const INITIAL_PRODUCTS: Product[] = [
   { id: '1', name: 'Sauvage', brand: 'Dior', description: 'Eau de Toilette 100ml', sku: 'DIO-SAU-100', currentStock: 10, avgCostUSD: 85, targetMargin: 40 },
   { id: '2', name: 'Bleu de Chanel', brand: 'Chanel', description: 'Parfum 100ml', sku: 'CHA-BLE-100', currentStock: 5, avgCostUSD: 110, targetMargin: 35 },
@@ -26,18 +25,33 @@ const INITIAL_PRODUCTS: Product[] = [
 
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('products');
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    try {
+      const saved = localStorage.getItem('products');
+      return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    } catch (error) {
+      console.error('Error loading products from localStorage:', error);
+      return INITIAL_PRODUCTS;
+    }
   });
 
   const [sales, setSales] = useState<Sale[]>(() => {
-    const saved = localStorage.getItem('sales');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('sales');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('Error loading sales from localStorage:', error);
+      return [];
+    }
   });
 
   const [purchases, setPurchases] = useState<PurchaseEntry[]>(() => {
-    const saved = localStorage.getItem('purchases');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('purchases');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('Error loading purchases from localStorage:', error);
+      return [];
+    }
   });
 
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate>({
@@ -47,29 +61,55 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     source: 'API'
   });
 
-  // Persist to LocalStorage
-  useEffect(() => { localStorage.setItem('products', JSON.stringify(products)); }, [products]);
-  useEffect(() => { localStorage.setItem('sales', JSON.stringify(sales)); }, [sales]);
-  useEffect(() => { localStorage.setItem('purchases', JSON.stringify(purchases)); }, [purchases]);
-
-  // Initial Rate Fetch
   useEffect(() => {
-    if (exchangeRate.source === 'API') {
-      refreshExchangeRate();
+    try {
+      localStorage.setItem('products', JSON.stringify(products));
+    } catch (error) {
+      console.error('Error saving products to localStorage:', error);
+    }
+  }, [products]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sales', JSON.stringify(sales));
+    } catch (error) {
+      console.error('Error saving sales to localStorage:', error);
+    }
+  }, [sales]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('purchases', JSON.stringify(purchases));
+    } catch (error) {
+      console.error('Error saving purchases to localStorage:', error);
+    }
+  }, [purchases]);
+
+  const refreshExchangeRate = useCallback(async () => {
+    try {
+      const rate = await fetchExchangeRate();
+      setExchangeRate(rate);
+    } catch (error) {
+      console.error('Error fetching exchange rate:', error);
+      setExchangeRate(prev => ({
+        ...prev,
+        buy: prev.buy || 1180,
+        sell: prev.sell || 1200,
+        lastUpdated: new Date().toISOString(),
+        source: 'MANUAL'
+      }));
     }
   }, []);
 
-  const refreshExchangeRate = async () => {
-    if (exchangeRate.source === 'MANUAL') return;
-    const rate = await fetchExchangeRate();
-    setExchangeRate(rate);
-  };
+  useEffect(() => {
+    refreshExchangeRate();
+  }, [refreshExchangeRate]);
 
   const setManualExchangeRate = (val: number) => {
     setExchangeRate(prev => ({
       ...prev,
       sell: val,
-      buy: val * 0.95, // Approximate spread
+      buy: val * 0.95,
       lastUpdated: new Date().toISOString(),
       source: 'MANUAL'
     }));
@@ -77,7 +117,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const toggleRateSource = (source: 'API' | 'MANUAL') => {
     setExchangeRate(prev => ({ ...prev, source }));
-    if (source === 'API') refreshExchangeRate();
+    if (source === 'API') {
+      refreshExchangeRate();
+    }
   };
 
   const addProduct = (product: Product) => {
@@ -91,12 +133,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       date: new Date().toISOString(),
       quantity,
       costPerUnitUSD: costUSD,
-      exchangeRateUsed: exchangeRate.sell
+      exchangeRateUsed: exchangeRate.sell || 1200
     };
 
     setPurchases(prev => [...prev, newPurchase]);
 
-    // Recalculate Weighted Average Cost and Stock
     setProducts(prev => prev.map(p => {
       if (p.id !== productId) return p;
       
@@ -117,13 +158,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const saleItems: SaleItem[] = [];
     let totalARS = 0;
     let totalUSD = 0;
+    const currentRate = exchangeRate.sell || 1200;
 
-    // Update stock and build sale items
     const updatedProducts = products.map(p => {
       const cartItem = cartItems.find(c => c.productId === p.id);
       if (!cartItem) return p;
 
-      // Logic to prevent negative stock could go here, but allowing for now with warning in UI
       const soldQty = cartItem.quantity;
       
       saleItems.push({
@@ -135,12 +175,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       });
 
       totalARS += cartItem.priceARS * soldQty;
-      // Effective USD received based on current replacement cost logic or just conversion
-      totalUSD += (cartItem.priceARS * soldQty) / exchangeRate.sell; 
+      totalUSD += (cartItem.priceARS * soldQty) / currentRate;
 
       return {
         ...p,
-        currentStock: p.currentStock - soldQty
+        currentStock: Math.max(0, p.currentStock - soldQty)
       };
     });
 
@@ -150,7 +189,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       items: saleItems,
       totalTotalARS: totalARS,
       totalTotalUSD: totalUSD,
-      exchangeRateUsed: exchangeRate.sell,
+      exchangeRateUsed: currentRate,
       channel,
       customerName: customer
     };
