@@ -5,15 +5,15 @@ export enum Currency {
 
 export enum SaleChannel {
   ONLINE = 'Online',
-  STORE = 'Store',
+  STORE = 'Local',
   WHATSAPP = 'WhatsApp',
-  OTHER = 'Other'
+  OTHER = 'Otro',
 }
 
 export interface ExchangeRate {
   buy: number;
   sell: number;
-  lastUpdated: string; // ISO Date
+  lastUpdated: string;
   source: 'API' | 'MANUAL';
 }
 
@@ -24,26 +24,26 @@ export interface Product {
   description: string;
   sku: string;
   currentStock: number;
-  avgCostUSD: number; // Weighted average cost in USD
-  targetMargin: number; // Percentage (e.g., 30 for 30%)
+  avgCostUSD: number;
+  targetMargin: number;
   imageUrl?: string;
 }
 
 export interface PurchaseEntry {
   id: string;
   productId: string;
-  date: string; // ISO Date
+  date: string;
   quantity: number;
   costPerUnitUSD: number;
-  exchangeRateUsed: number; // ARS/USD at moment of purchase
+  exchangeRateUsed: number;
 }
 
 export interface Sale {
   id: string;
-  date: string; // ISO Date
+  date: string;
   items: SaleItem[];
   totalTotalARS: number;
-  totalTotalUSD: number; // Calculated at moment of sale
+  totalTotalUSD: number;
   exchangeRateUsed: number;
   channel: SaleChannel;
   customerName?: string;
@@ -54,7 +54,7 @@ export interface SaleItem {
   productName: string;
   quantity: number;
   unitPriceARS: number;
-  unitCostAtSaleUSD: number; // Snapshot of cost
+  unitCostAtSaleUSD: number;
 }
 
 export interface BusinessMetrics {

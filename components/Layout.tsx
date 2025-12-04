@@ -10,13 +10,13 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => {
   const { exchangeRate } = useStore();
-
+  
   const navItems = [
-    { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
-    { id: 'inventory', label: 'Stock', icon: Package },
-    { id: 'sales', label: 'POS', icon: ShoppingBag },
-    { id: 'transactions', label: 'History', icon: ArrowRightLeft },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
+    { id: 'inventory', label: 'Inventario', icon: Package },
+    { id: 'sales', label: 'Ventas', icon: ShoppingBag },
+    { id: 'transactions', label: 'Historial', icon: ArrowRightLeft },
+    { id: 'settings', label: 'Configuración', icon: Settings },
   ];
 
   return (
