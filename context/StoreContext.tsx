@@ -1,17 +1,28 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Product, Sale, PurchaseEntry, ExchangeRate, SaleItem, SaleChannel, Currency } from '../types';
 import { fetchExchangeRate } from '../services/currencyService';
+import {
+  fetchProducts,
+  addProductToDb,
+  updateProductInDb,
+  deleteProductFromDb,
+  addPurchaseToDb,
+  updateProductStock,
+  addSaleToDb,
+  fetchSales,
+  fetchPurchases,
+} from '../services/productService';
 
 interface StoreContextType {
   products: Product[];
   sales: Sale[];
   purchases: PurchaseEntry[];
   exchangeRate: ExchangeRate;
-  addProduct: (product: Product) => void;
-  updateProduct: (productId: string, updates: Partial<Product>) => void;
-  deleteProduct: (productId: string) => void;
-  addStock: (productId: string, quantity: number, costValue: number, costCurrency: Currency) => void;
-  recordSale: (items: {productId: string, quantity: number, priceARS: number}[], channel: SaleChannel, customer?: string) => void;
+  addProduct: (product: Product) => Promise<void>;
+  updateProduct: (productId: string, updates: Partial<Product>) => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
+  addStock: (productId: string, quantity: number, costValue: number, costCurrency: Currency) => Promise<void>;
+  recordSale: (items: {productId: string, quantity: number, priceARS: number}[], channel: SaleChannel, customer?: string) => Promise<void>;
   refreshExchangeRate: () => Promise<void>;
   setManualExchangeRate: (rate: number) => void;
   toggleRateSource: (source: 'API' | 'MANUAL') => void;
@@ -29,78 +40,38 @@ const convertFromUSD = (valueUSD: number, currency: Currency, exchangeRate: numb
   return valueUSD * exchangeRate;
 };
 
-const INITIAL_PRODUCTS: Product[] = [
-  { id: '1', name: 'Sauvage', brand: 'Dior', description: 'Eau de Toilette 100ml', sku: 'DIO-SAU-100', currentStock: 10, avgCostUSD: 85, costCurrency: Currency.USD, costValue: 85, targetMargin: 40 },
-  { id: '2', name: 'Bleu de Chanel', brand: 'Chanel', description: 'Parfum 100ml', sku: 'CHA-BLE-100', currentStock: 5, avgCostUSD: 110, costCurrency: Currency.USD, costValue: 110, targetMargin: 35 },
-  { id: '3', name: 'Acqua Di Gio', brand: 'Giorgio Armani', description: 'Profondo 75ml', sku: 'ARM-ADG-75', currentStock: 12, avgCostUSD: 70, costCurrency: Currency.USD, costValue: 70, targetMargin: 50 },
-];
-
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      const saved = localStorage.getItem('products');
-      const parsed = saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
-      return parsed.map((p: Product) => ({
-        ...p,
-        costCurrency: p.costCurrency || Currency.USD,
-        costValue: p.costValue ?? p.avgCostUSD ?? 0,
-      }));
-    } catch (error) {
-      console.error('Error loading products from localStorage:', error);
-      return INITIAL_PRODUCTS;
-    }
-  });
-
-  const [sales, setSales] = useState<Sale[]>(() => {
-    try {
-      const saved = localStorage.getItem('sales');
-      return saved ? JSON.parse(saved) : [];
-    } catch (error) {
-      console.error('Error loading sales from localStorage:', error);
-      return [];
-    }
-  });
-
-  const [purchases, setPurchases] = useState<PurchaseEntry[]>(() => {
-    try {
-      const saved = localStorage.getItem('purchases');
-      return saved ? JSON.parse(saved) : [];
-    } catch (error) {
-      console.error('Error loading purchases from localStorage:', error);
-      return [];
-    }
-  });
-
+  const [products, setProducts] = useState<Product[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate>({
     buy: 0,
     sell: 0,
     lastUpdated: new Date().toISOString(),
     source: 'API'
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('products', JSON.stringify(products));
-    } catch (error) {
-      console.error('Error saving products to localStorage:', error);
-    }
-  }, [products]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('sales', JSON.stringify(sales));
-    } catch (error) {
-      console.error('Error saving sales to localStorage:', error);
-    }
-  }, [sales]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('purchases', JSON.stringify(purchases));
-    } catch (error) {
-      console.error('Error saving purchases to localStorage:', error);
-    }
-  }, [purchases]);
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [productsData, salesData, purchasesData] = await Promise.all([
+          fetchProducts(),
+          fetchSales(),
+          fetchPurchases(),
+        ]);
+        setProducts(productsData);
+        setSales(salesData);
+        setPurchases(purchasesData);
+      } catch (error) {
+        console.error('Error loading data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
   useEffect(() => {
     if (exchangeRate.sell > 0) {
@@ -151,118 +122,167 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const addProduct = (product: Product) => {
-    const costInUSD = convertToUSD(product.costValue, product.costCurrency, exchangeRate.sell || 1200);
-    const productWithUSD: Product = {
-      ...product,
-      avgCostUSD: costInUSD,
-    };
-    setProducts(prev => [...prev, productWithUSD]);
+  const addProduct = async (product: Product) => {
+    try {
+      const costInUSD = convertToUSD(product.costValue, product.costCurrency, exchangeRate.sell || 1200);
+      const productWithUSD: Product = {
+        ...product,
+        avgCostUSD: costInUSD,
+      };
+      const savedProduct = await addProductToDb(productWithUSD);
+      setProducts(prev => [...prev, savedProduct]);
+    } catch (error) {
+      console.error('Error adding product:', error);
+      throw error;
+    }
   };
 
-  const updateProduct = (productId: string, updates: Partial<Product>) => {
-    setProducts(prev => prev.map(p => {
-      if (p.id !== productId) return p;
+  const updateProduct = async (productId: string, updates: Partial<Product>) => {
+    try {
+      const existing = products.find(p => p.id === productId);
+      if (!existing) return;
       
-      const updatedProduct = { ...p, ...updates };
+      const updated = { ...existing, ...updates };
       
       if (updates.costValue !== undefined || updates.costCurrency !== undefined) {
-        const newCostValue = updates.costValue ?? p.costValue;
-        const newCostCurrency = updates.costCurrency ?? p.costCurrency;
+        const newCostValue = updates.costValue ?? existing.costValue;
+        const newCostCurrency = updates.costCurrency ?? existing.costCurrency;
         const costInUSD = convertToUSD(newCostValue, newCostCurrency, exchangeRate.sell || 1200);
-        updatedProduct.avgCostUSD = costInUSD;
-        updatedProduct.costValue = newCostValue;
-        updatedProduct.costCurrency = newCostCurrency;
+        updated.avgCostUSD = costInUSD;
+        updated.costValue = newCostValue;
+        updated.costCurrency = newCostCurrency;
       }
       
-      return updatedProduct;
-    }));
+      const savedProduct = await updateProductInDb(productId, updated);
+      setProducts(prev => prev.map(p => p.id === productId ? savedProduct : p));
+    } catch (error) {
+      console.error('Error updating product:', error);
+      throw error;
+    }
   };
 
-  const deleteProduct = (productId: string) => {
-    setProducts(prev => prev.filter(p => p.id !== productId));
-    setPurchases(prev => prev.filter(p => p.productId !== productId));
+  const deleteProduct = async (productId: string) => {
+    try {
+      await deleteProductFromDb(productId);
+      setProducts(prev => prev.filter(p => p.id !== productId));
+      setPurchases(prev => prev.filter(p => p.productId !== productId));
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      throw error;
+    }
   };
 
-  const addStock = (productId: string, quantity: number, costValue: number, costCurrency: Currency) => {
-    const costInUSD = convertToUSD(costValue, costCurrency, exchangeRate.sell || 1200);
-    
-    const newPurchase: PurchaseEntry = {
-      id: crypto.randomUUID(),
-      productId,
-      date: new Date().toISOString(),
-      quantity,
-      costPerUnitUSD: costInUSD,
-      costCurrency,
-      costValue,
-      exchangeRateUsed: exchangeRate.sell || 1200
-    };
-
-    setPurchases(prev => [...prev, newPurchase]);
-
-    setProducts(prev => prev.map(p => {
-      if (p.id !== productId) return p;
+  const addStock = async (productId: string, quantity: number, costValue: number, costCurrency: Currency) => {
+    try {
+      const costInUSD = convertToUSD(costValue, costCurrency, exchangeRate.sell || 1200);
       
-      const totalOldValue = p.currentStock * p.avgCostUSD;
+      const newPurchase: PurchaseEntry = {
+        id: crypto.randomUUID(),
+        productId,
+        date: new Date().toISOString(),
+        quantity,
+        costPerUnitUSD: costInUSD,
+        costCurrency,
+        costValue,
+        exchangeRateUsed: exchangeRate.sell || 1200
+      };
+
+      await addPurchaseToDb(newPurchase);
+      setPurchases(prev => [...prev, newPurchase]);
+
+      const product = products.find(p => p.id === productId);
+      if (!product) return;
+
+      const totalOldValue = product.currentStock * product.avgCostUSD;
       const newStockValue = quantity * costInUSD;
-      const newTotalStock = p.currentStock + quantity;
+      const newTotalStock = product.currentStock + quantity;
       const newAvgCostUSD = newTotalStock > 0 ? (totalOldValue + newStockValue) / newTotalStock : costInUSD;
 
-      const newCostValue = p.costCurrency === costCurrency
-        ? ((p.costValue * p.currentStock) + (costValue * quantity)) / newTotalStock
-        : convertFromUSD(newAvgCostUSD, p.costCurrency, exchangeRate.sell || 1200);
+      const newCostValue = product.costCurrency === costCurrency
+        ? ((product.costValue * product.currentStock) + (costValue * quantity)) / newTotalStock
+        : convertFromUSD(newAvgCostUSD, product.costCurrency, exchangeRate.sell || 1200);
 
-      return {
-        ...p,
-        currentStock: newTotalStock,
-        avgCostUSD: newAvgCostUSD,
-        costValue: newCostValue,
-      };
-    }));
-  };
-
-  const recordSale = (cartItems: {productId: string, quantity: number, priceARS: number}[], channel: SaleChannel, customer?: string) => {
-    const saleItems: SaleItem[] = [];
-    let totalARS = 0;
-    let totalUSD = 0;
-    const currentRate = exchangeRate.sell || 1200;
-
-    const updatedProducts = products.map(p => {
-      const cartItem = cartItems.find(c => c.productId === p.id);
-      if (!cartItem) return p;
-
-      const soldQty = cartItem.quantity;
-      
-      saleItems.push({
-        productId: p.id,
-        productName: p.name,
-        quantity: soldQty,
-        unitPriceARS: cartItem.priceARS,
-        unitCostAtSaleUSD: p.avgCostUSD
+      await updateProductStock(productId, {
+        current_stock: newTotalStock,
+        avg_cost_usd: newAvgCostUSD,
+        cost_value: newCostValue,
       });
 
-      totalARS += cartItem.priceARS * soldQty;
-      totalUSD += (cartItem.priceARS * soldQty) / currentRate;
+      setProducts(prev => prev.map(p => {
+        if (p.id !== productId) return p;
+        return {
+          ...p,
+          currentStock: newTotalStock,
+          avgCostUSD: newAvgCostUSD,
+          costValue: newCostValue,
+        };
+      }));
+    } catch (error) {
+      console.error('Error adding stock:', error);
+      throw error;
+    }
+  };
 
-      return {
-        ...p,
-        currentStock: Math.max(0, p.currentStock - soldQty)
+  const recordSale = async (cartItems: {productId: string, quantity: number, priceARS: number}[], channel: SaleChannel, customer?: string) => {
+    try {
+      const saleItems: SaleItem[] = [];
+      let totalARS = 0;
+      let totalUSD = 0;
+      const currentRate = exchangeRate.sell || 1200;
+
+      const updatedProducts = products.map(p => {
+        const cartItem = cartItems.find(c => c.productId === p.id);
+        if (!cartItem) return p;
+
+        const soldQty = cartItem.quantity;
+        
+        saleItems.push({
+          productId: p.id,
+          productName: p.name,
+          quantity: soldQty,
+          unitPriceARS: cartItem.priceARS,
+          unitCostAtSaleUSD: p.avgCostUSD
+        });
+
+        totalARS += cartItem.priceARS * soldQty;
+        totalUSD += (cartItem.priceARS * soldQty) / currentRate;
+
+        return {
+          ...p,
+          currentStock: Math.max(0, p.currentStock - soldQty)
+        };
+      });
+
+      const newSale: Sale = {
+        id: crypto.randomUUID(),
+        date: new Date().toISOString(),
+        items: saleItems,
+        totalTotalARS: totalARS,
+        totalTotalUSD: totalUSD,
+        exchangeRateUsed: currentRate,
+        channel,
+        customerName: customer
       };
-    });
 
-    const newSale: Sale = {
-      id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      items: saleItems,
-      totalTotalARS: totalARS,
-      totalTotalUSD: totalUSD,
-      exchangeRateUsed: currentRate,
-      channel,
-      customerName: customer
-    };
+      await addSaleToDb(newSale);
+      
+      for (const item of saleItems) {
+        const product = updatedProducts.find(p => p.id === item.productId);
+        if (product) {
+          await updateProductStock(item.productId, {
+            current_stock: product.currentStock,
+            avg_cost_usd: product.avgCostUSD,
+            cost_value: product.costValue,
+          });
+        }
+      }
 
-    setProducts(updatedProducts);
-    setSales(prev => [...prev, newSale]);
+      setProducts(updatedProducts);
+      setSales(prev => [...prev, newSale]);
+    } catch (error) {
+      console.error('Error recording sale:', error);
+      throw error;
+    }
   };
 
   return (

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { Product, Currency } from '../types';
+import { Product, Currency, ProductLine } from '../types';
 import { Plus, Search, ArrowDown, Package, Edit2, Trash2 } from 'lucide-react';
 
 export const Inventory: React.FC = () => {
@@ -20,6 +20,7 @@ export const Inventory: React.FC = () => {
     costCurrency: Currency.USD,
     costValue: 0,
     targetMargin: 30,
+    line: 'DUP',
   });
 
   const [editProduct, setEditProduct] = useState<Partial<Product>>({
@@ -31,6 +32,7 @@ export const Inventory: React.FC = () => {
     costCurrency: Currency.USD,
     costValue: 0,
     targetMargin: 30,
+    line: 'DUP',
   });
   
   const [stockEntry, setStockEntry] = useState({
@@ -49,35 +51,45 @@ export const Inventory: React.FC = () => {
     return valueUSD * (exchangeRate.sell || 1200);
   };
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProduct.name || !newProduct.sku) return;
+    if (!newProduct.name || !newProduct.sku || !newProduct.line) return;
 
-    addProduct({
-      id: crypto.randomUUID(),
-      name: newProduct.name!,
-      brand: newProduct.brand || '',
-      description: newProduct.description || '',
-      sku: newProduct.sku!,
-      currentStock: Number(newProduct.currentStock),
-      avgCostUSD: 0,
-      costCurrency: newProduct.costCurrency || Currency.USD,
-      costValue: Number(newProduct.costValue),
-      targetMargin: Number(newProduct.targetMargin),
-    } as Product);
+    try {
+      await addProduct({
+        id: crypto.randomUUID(),
+        name: newProduct.name!,
+        brand: newProduct.brand || '',
+        description: newProduct.description || '',
+        sku: newProduct.sku!,
+        currentStock: Number(newProduct.currentStock),
+        avgCostUSD: 0,
+        costCurrency: newProduct.costCurrency || Currency.USD,
+        costValue: Number(newProduct.costValue),
+        targetMargin: Number(newProduct.targetMargin),
+        line: newProduct.line!,
+        category: newProduct.category,
+        size_ml: newProduct.size_ml,
+        variant: newProduct.variant,
+      } as Product);
 
-    setShowAddProduct(false);
-    setNewProduct({
-      name: '',
-      brand: '',
-      description: '',
-      sku: '',
-      currentStock: 0,
-      avgCostUSD: 0,
-      costCurrency: Currency.USD,
-      costValue: 0,
-      targetMargin: 30,
-    });
+      setShowAddProduct(false);
+      setNewProduct({
+        name: '',
+        brand: '',
+        description: '',
+        sku: '',
+        currentStock: 0,
+        avgCostUSD: 0,
+        costCurrency: Currency.USD,
+        costValue: 0,
+        targetMargin: 30,
+        line: 'DUP',
+      });
+    } catch (error) {
+      console.error('Error creating product:', error);
+      alert('Error al crear el producto. Verifica la consola para más detalles.');
+    }
   };
 
   const handleEditProduct = (productId: string) => {
@@ -93,60 +105,84 @@ export const Inventory: React.FC = () => {
       costCurrency: product.costCurrency,
       costValue: product.costValue,
       targetMargin: product.targetMargin,
+      line: product.line,
+      category: product.category,
+      size_ml: product.size_ml,
+      variant: product.variant,
     });
     setShowEditProduct(productId);
   };
 
-  const handleUpdateProduct = (e: React.FormEvent) => {
+  const handleUpdateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showEditProduct) return;
 
-    updateProduct(showEditProduct, {
-      name: editProduct.name!,
-      brand: editProduct.brand || '',
-      description: editProduct.description || '',
-      sku: editProduct.sku!,
-      currentStock: Number(editProduct.currentStock),
-      costCurrency: editProduct.costCurrency || Currency.USD,
-      costValue: Number(editProduct.costValue),
-      targetMargin: Number(editProduct.targetMargin),
-    });
+    try {
+      await updateProduct(showEditProduct, {
+        name: editProduct.name!,
+        brand: editProduct.brand || '',
+        description: editProduct.description || '',
+        sku: editProduct.sku!,
+        currentStock: Number(editProduct.currentStock),
+        costCurrency: editProduct.costCurrency || Currency.USD,
+        costValue: Number(editProduct.costValue),
+        targetMargin: Number(editProduct.targetMargin),
+        line: editProduct.line!,
+        category: editProduct.category,
+        size_ml: editProduct.size_ml,
+        variant: editProduct.variant,
+      });
 
-    setShowEditProduct(null);
-    setEditProduct({
-      name: '',
-      brand: '',
-      description: '',
-      sku: '',
-      currentStock: 0,
-      costCurrency: Currency.USD,
-      costValue: 0,
-      targetMargin: 30,
-    });
+      setShowEditProduct(null);
+      setEditProduct({
+        name: '',
+        brand: '',
+        description: '',
+        sku: '',
+        currentStock: 0,
+        costCurrency: Currency.USD,
+        costValue: 0,
+        targetMargin: 30,
+        line: 'DUP',
+      });
+    } catch (error) {
+      console.error('Error updating product:', error);
+      alert('Error al actualizar el producto. Verifica la consola para más detalles.');
+    }
   };
 
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
     
     if (window.confirm(`¿Estás seguro de eliminar "${product.name}"? Esta acción no se puede deshacer y también se eliminarán las compras relacionadas.`)) {
-      deleteProduct(productId);
+      try {
+        await deleteProduct(productId);
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        alert('Error al eliminar el producto. Verifica la consola para más detalles.');
+      }
     }
   };
 
-  const handleAddStock = (e: React.FormEvent) => {
+  const handleAddStock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showAddStock) return;
 
-    addStock(
-      showAddStock,
-      Number(stockEntry.quantity),
-      Number(stockEntry.costValue),
-      stockEntry.costCurrency
-    );
-    
-    setShowAddStock(null);
-    setStockEntry({ quantity: 1, costValue: 0, costCurrency: Currency.USD });
+    try {
+      await addStock(
+        showAddStock,
+        Number(stockEntry.quantity),
+        Number(stockEntry.costValue),
+        stockEntry.costCurrency
+      );
+      
+      setShowAddStock(null);
+      setStockEntry({ quantity: 1, costValue: 0, costCurrency: Currency.USD });
+    } catch (error) {
+      console.error('Error adding stock:', error);
+      alert('Error al agregar stock. Verifica la consola para más detalles.');
+    }
   };
 
   const filteredProducts = products.filter(
@@ -432,6 +468,27 @@ export const Inventory: React.FC = () => {
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
+                  Línea
+                </label>
+                <select
+                  required
+                  className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
+                  value={newProduct.line || 'DUP'}
+                  onChange={(e) =>
+                    setNewProduct({
+                      ...newProduct,
+                      line: e.target.value as ProductLine,
+                    })
+                  }
+                >
+                  <option value="DUP">DUP</option>
+                  <option value="ARABIC">ARABIC</option>
+                  <option value="DUP_MINI">DUP_MINI</option>
+                  <option value="ARABIC_OTHER">ARABIC_OTHER</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
                   Nombre del producto
                 </label>
                 <input
@@ -591,6 +648,27 @@ export const Inventory: React.FC = () => {
                     placeholder="COD-123"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
+                  Línea
+                </label>
+                <select
+                  required
+                  className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
+                  value={editProduct.line || 'DUP'}
+                  onChange={(e) =>
+                    setEditProduct({
+                      ...editProduct,
+                      line: e.target.value as ProductLine,
+                    })
+                  }
+                >
+                  <option value="DUP">DUP</option>
+                  <option value="ARABIC">ARABIC</option>
+                  <option value="DUP_MINI">DUP_MINI</option>
+                  <option value="ARABIC_OTHER">ARABIC_OTHER</option>
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">

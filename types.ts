@@ -3,6 +3,9 @@ export enum Currency {
   ARS = 'ARS',
 }
 
+export type ProductLine = 'DUP' | 'ARABIC' | 'DUP_MINI' | 'ARABIC_OTHER';
+
+
 export enum SaleChannel {
   ONLINE = 'Online',
   STORE = 'Local',
@@ -25,10 +28,14 @@ export interface Product {
   sku: string;
   currentStock: number;
   avgCostUSD: number;
-  costCurrency: Currency;
+  costCurrency: Currency; // USD | ARS
   costValue: number;
   targetMargin: number;
   imageUrl?: string;
+  line: ProductLine;
+  category?: string;   // opcional
+  size_ml?: number;    // opcional
+  variant?: string;    // opcional (edp/edt/oil)
 }
 
 export interface PurchaseEntry {
