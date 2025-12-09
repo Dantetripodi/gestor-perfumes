@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Product, Currency } from '../types';
-import { Plus, Search, Package } from 'lucide-react';
+import { Plus, Search, Package, X, Check } from 'lucide-react';
 import { useProductForm } from '../hooks/useProductForm';
 import { useCurrencyConversion } from '../hooks/useCurrencyConversion';
 import { DEFAULT_PRODUCT } from '../constants/productDefaults';
-import { ProductFormModal } from './components/inventory/ProductFormModal';
-import { StockFormModal } from './components/inventory/StockFormModal';
+import { ProductFormFields } from './components/inventory/ProductFormFields';
 import { ProductTable } from './components/inventory/ProductTable';
 import { ProductCard } from './components/inventory/ProductCard';
 
 export const Inventory: React.FC = () => {
   const { products, addProduct, updateProduct, deleteProduct, addStock, exchangeRate } = useStore();
   const [showAddProduct, setShowAddProduct] = useState(false);
-  const [showEditProduct, setShowEditProduct] = useState<string | null>(null);
-  const [showAddStock, setShowAddStock] = useState<string | null>(null);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [addingStockId, setAddingStockId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const { product: newProduct, updateField: updateNewField, resetForm: resetNewForm } = useProductForm();
@@ -75,15 +74,15 @@ export const Inventory: React.FC = () => {
       size_ml: product.size_ml,
       variant: product.variant,
     });
-    setShowEditProduct(productId);
+    setEditingProductId(productId);
   };
 
   const handleUpdateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!showEditProduct) return;
+    if (!editingProductId) return;
 
     try {
-      await updateProduct(showEditProduct, {
+      await updateProduct(editingProductId, {
         name: editProductData.name!,
         brand: editProductData.brand || '',
         description: editProductData.description || '',
@@ -98,12 +97,17 @@ export const Inventory: React.FC = () => {
         variant: editProductData.variant,
       });
 
-      setShowEditProduct(null);
+      setEditingProductId(null);
       resetEditForm();
     } catch (error) {
       console.error('Error updating product:', error);
       alert('Error al actualizar el producto. Verifica la consola para más detalles.');
     }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProductId(null);
+    resetEditForm();
   };
 
   const handleDeleteProduct = async (productId: string) => {
@@ -117,6 +121,9 @@ export const Inventory: React.FC = () => {
     ) {
       try {
         await deleteProduct(productId);
+        if (editingProductId === productId) {
+          setEditingProductId(null);
+        }
       } catch (error) {
         console.error('Error deleting product:', error);
         alert('Error al eliminar el producto. Verifica la consola para más detalles.');
@@ -128,7 +135,7 @@ export const Inventory: React.FC = () => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
 
-    setShowAddStock(productId);
+    setAddingStockId(productId);
     setStockEntry({
       quantity: 1,
       costValue: product.costValue,
@@ -138,22 +145,27 @@ export const Inventory: React.FC = () => {
 
   const handleAddStock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!showAddStock) return;
+    if (!addingStockId) return;
 
     try {
       await addStock(
-        showAddStock,
+        addingStockId,
         Number(stockEntry.quantity),
         Number(stockEntry.costValue),
         stockEntry.costCurrency
       );
 
-      setShowAddStock(null);
+      setAddingStockId(null);
       setStockEntry({ quantity: 1, costValue: 0, costCurrency: Currency.USD });
     } catch (error) {
       console.error('Error adding stock:', error);
       alert('Error al agregar stock. Verifica la consola para más detalles.');
     }
+  };
+
+  const handleCancelStock = () => {
+    setAddingStockId(null);
+    setStockEntry({ quantity: 1, costValue: 0, costCurrency: Currency.USD });
   };
 
   const updateStockField = (field: keyof typeof stockEntry, value: any) => {
@@ -167,9 +179,16 @@ export const Inventory: React.FC = () => {
       p.sku.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const currentStockProduct = showAddStock
-    ? products.find((p) => p.id === showAddStock)
-    : null;
+  const getEquivalent = (costValue: number, costCurrency: Currency) => {
+    if (costValue === 0) return null;
+    if (costCurrency === Currency.USD) {
+      const ars = costValue * (exchangeRate.sell || 1200);
+      return `≈ $${ars.toFixed(2)} ARS`;
+    } else {
+      const usd = costValue / (exchangeRate.sell || 1200);
+      return `≈ $${usd.toFixed(2)} USD`;
+    }
+  };
 
   return (
     <div className="space-y-6 pb-20 md:pb-0">
@@ -179,12 +198,44 @@ export const Inventory: React.FC = () => {
           <p className="text-slate-500 mt-1">Gestiona productos y niveles de stock.</p>
         </div>
         <button
-          onClick={() => setShowAddProduct(true)}
+          onClick={() => setShowAddProduct(!showAddProduct)}
           className="hidden md:flex bg-slate-900 text-white px-5 py-3 rounded-xl items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg shadow-slate-900/20"
         >
-          <Plus size={20} /> Agregar producto
+          {showAddProduct ? <X size={20} /> : <Plus size={20} />}
+          {showAddProduct ? 'Cancelar' : 'Agregar producto'}
         </button>
       </div>
+
+      {showAddProduct && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 md:p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-900 mb-4">Nuevo producto</h3>
+          <form onSubmit={handleCreateProduct} className="space-y-4">
+            <ProductFormFields
+              product={newProduct}
+              onChange={updateNewField}
+              exchangeRate={exchangeRate.sell}
+            />
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddProduct(false);
+                  resetNewForm();
+                }}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium shadow transition-all"
+              >
+                Crear producto
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="sticky top-0 z-10 bg-zinc-50 pt-2 pb-4">
         <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-slate-200 flex items-center gap-3 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all">
@@ -201,11 +252,21 @@ export const Inventory: React.FC = () => {
 
       <ProductTable
         products={filteredProducts}
+        editingProductId={editingProductId}
+        addingStockId={addingStockId}
+        editProductData={editingProductId ? editProductData : undefined}
+        stockEntry={addingStockId ? stockEntry : undefined}
         onEdit={handleEditProduct}
         onDelete={handleDeleteProduct}
         onAddStock={handleAddStockClick}
+        onUpdateProduct={handleUpdateProduct}
+        onCancelEdit={handleCancelEdit}
+        onAddStockSubmit={handleAddStock}
+        onCancelStock={handleCancelStock}
+        onUpdateStockField={updateStockField}
         convertToUSD={convertToUSD}
         convertFromUSD={convertFromUSD}
+        exchangeRate={exchangeRate.sell}
       />
 
       <div className="md:hidden grid grid-cols-1 gap-4">
@@ -229,50 +290,11 @@ export const Inventory: React.FC = () => {
       </div>
 
       <button
-        onClick={() => setShowAddProduct(true)}
+        onClick={() => setShowAddProduct(!showAddProduct)}
         className="md:hidden fixed bottom-24 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-xl shadow-slate-900/30 flex items-center justify-center z-40 active:scale-95 transition-transform"
       >
-        <Plus size={28} />
+        {showAddProduct ? <X size={28} /> : <Plus size={28} />}
       </button>
-
-      <ProductFormModal
-        isOpen={showAddProduct}
-        mode="create"
-        product={newProduct}
-        onSubmit={handleCreateProduct}
-        onClose={() => {
-          setShowAddProduct(false);
-          resetNewForm();
-        }}
-        onChange={updateNewField}
-        exchangeRate={exchangeRate.sell}
-      />
-
-      <ProductFormModal
-        isOpen={!!showEditProduct}
-        mode="edit"
-        product={editProductData}
-        onSubmit={handleUpdateProduct}
-        onClose={() => {
-          setShowEditProduct(null);
-          resetEditForm();
-        }}
-        onChange={updateEditField}
-        exchangeRate={exchangeRate.sell}
-      />
-
-      <StockFormModal
-        isOpen={!!showAddStock}
-        product={currentStockProduct}
-        stockEntry={stockEntry}
-        onSubmit={handleAddStock}
-        onClose={() => {
-          setShowAddStock(null);
-          setStockEntry({ quantity: 1, costValue: 0, costCurrency: Currency.USD });
-        }}
-        onChange={updateStockField}
-        exchangeRate={exchangeRate.sell}
-      />
     </div>
   );
 };

@@ -39,79 +39,93 @@ export const StockFormModal: React.FC<StockFormModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
-        <h3 className="text-xl font-bold text-slate-900 mb-2">
-          Reponer inventario
-        </h3>
-        <p className="text-sm text-slate-500 mb-6">
-          Actualizar niveles para{' '}
-          <span className="font-bold text-slate-800">{product.name}</span>
-        </p>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
-              Cantidad a agregar
-            </label>
-            <input
-              type="number"
-              required
-              min="1"
-              className="w-full border border-slate-200 rounded-lg p-3 text-lg font-bold text-slate-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
-              value={stockEntry.quantity}
-              onChange={(e) => onChange('quantity', Number(e.target.value))}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
-              Moneda
-            </label>
-            <select
-              className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none mb-3"
-              value={stockEntry.costCurrency}
-              onChange={(e) => onChange('costCurrency', e.target.value as Currency)}
-            >
-              <option value={Currency.USD}>USD</option>
-              <option value={Currency.ARS}>ARS</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
-              Costo unitario
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-slate-400">$</span>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start md:items-center justify-center p-2 md:p-4">
+      <style>{`
+        @media (min-width: 768px) {
+          .stock-modal-container {
+            max-height: none !important;
+            overflow: visible !important;
+          }
+          .stock-modal-content {
+            overflow: visible !important;
+            max-height: none !important;
+          }
+        }
+      `}</style>
+      <div className="stock-modal-container bg-white rounded-lg shadow-2xl max-w-md w-full my-4 md:my-0 max-h-[calc(100vh-2rem)] md:max-h-none flex flex-col">
+        <div className="flex-shrink-0 px-3 md:px-4 pt-2 md:pt-1.5 pb-1.5 md:pb-1 border-b border-slate-200">
+          <h3 className="text-sm md:text-sm font-bold text-slate-900 mb-1 md:mb-0.5 leading-tight">
+            Reponer inventario
+          </h3>
+          <p className="text-xs md:text-[10px] text-slate-500">
+            Actualizar niveles para{' '}
+            <span className="font-bold text-slate-800">{product.name}</span>
+          </p>
+        </div>
+        <form onSubmit={onSubmit} className="flex flex-col">
+          <div className="stock-modal-content px-3 md:px-4 py-2 md:py-1.5 overflow-y-auto md:overflow-visible space-y-2 md:space-y-1">
+            <div>
+              <label className="block text-xs md:text-[10px] font-bold text-slate-500 mb-1 md:mb-0.5 uppercase tracking-wide">
+                Cantidad a agregar
+              </label>
               <input
                 type="number"
                 required
-                step="0.01"
-                className="w-full border border-slate-200 rounded-lg p-3 pl-6 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
-                value={stockEntry.costValue}
-                onChange={(e) => onChange('costValue', Number(e.target.value))}
+                min="1"
+                className="w-full border border-slate-200 rounded p-2 md:p-1 text-base md:text-sm font-bold text-slate-800 focus:ring-1 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
+                value={stockEntry.quantity}
+                onChange={(e) => onChange('quantity', Number(e.target.value))}
               />
             </div>
-            {stockEntry.costValue > 0 && (
-              <div className="mt-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                <div className="text-xs text-slate-500">Equivalente:</div>
-                <div className="font-medium text-slate-700">{getEquivalent()}</div>
+            <div>
+              <label className="block text-xs md:text-[10px] font-bold text-slate-500 mb-1 md:mb-0.5 uppercase tracking-wide">
+                Moneda
+              </label>
+              <select
+                className="w-full border border-slate-200 rounded p-2 md:p-1 text-sm md:text-xs focus:ring-1 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
+                value={stockEntry.costCurrency}
+                onChange={(e) => onChange('costCurrency', e.target.value as Currency)}
+              >
+                <option value={Currency.USD}>USD</option>
+                <option value={Currency.ARS}>ARS</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs md:text-[10px] font-bold text-slate-500 mb-1 md:mb-0.5 uppercase tracking-wide">
+                Costo unitario
+              </label>
+              <div className="relative">
+                <span className="absolute left-2 top-2 md:top-1 text-slate-400 text-sm md:text-xs">$</span>
+                <input
+                  type="number"
+                  required
+                  step="0.01"
+                  className="w-full border border-slate-200 rounded p-2 md:p-1 pl-6 text-sm md:text-xs focus:ring-1 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
+                  value={stockEntry.costValue}
+                  onChange={(e) => onChange('costValue', Number(e.target.value))}
+                />
               </div>
-            )}
-            <p className="text-[10px] text-amber-600 mt-2 font-medium bg-amber-50 p-2 rounded-lg border border-amber-100">
-              <span className="font-bold">Nota:</span> Esto actualizará el costo
-              promedio ponderado de tu inventario.
-            </p>
+              {stockEntry.costValue > 0 && (
+                <div className="mt-1.5 md:mt-1 bg-slate-50 p-1.5 md:p-1 rounded border border-slate-200">
+                  <div className="text-xs md:text-[9px] text-slate-500">Equivalente: <span className="font-medium text-slate-700">{getEquivalent()}</span></div>
+                </div>
+              )}
+              <p className="text-[11px] md:text-[9px] text-amber-600 mt-1.5 md:mt-1 font-medium bg-amber-50 p-1.5 md:p-1 rounded border border-amber-100">
+                <span className="font-bold">Nota:</span> Esto actualizará el costo promedio ponderado.
+              </p>
+            </div>
           </div>
-          <div className="flex justify-end gap-3 mt-8">
+          <div className="flex-shrink-0 flex justify-end gap-2 px-3 md:px-4 py-1.5 md:py-1.5 border-t border-slate-200 bg-slate-50 rounded-b-lg">
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors"
+              className="px-3 py-1.5 md:px-3 md:py-1 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors text-xs"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-amber-500 text-white rounded-xl hover:bg-amber-600 font-bold shadow-lg shadow-amber-500/20 transition-all"
+              className="px-3 py-1.5 md:px-3 md:py-1 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-bold shadow-lg shadow-amber-500/20 transition-all text-xs"
             >
               Confirmar stock
             </button>
